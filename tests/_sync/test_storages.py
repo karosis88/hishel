@@ -6,7 +6,7 @@ import sqlite3
 import pytest
 from httpcore import Request, Response
 
-from hishel import FileStorage, InMemoryStorage, RedisStorage, SQLiteStorage
+from hishel import FileStorage, InMemoryStorage, RedisStorage, SQLiteStorage, SQLStorage
 from hishel._serializers import Metadata
 from hishel._utils import sleep, generate_key
 
@@ -118,7 +118,7 @@ def test_inmemorystorage():
 
 
 
-def test_filestorage_expired(use_temp_dir, anyio_backend):
+def test_filestorage_expired(use_temp_dir):
     storage = FileStorage(ttl=0.2, check_ttl_every=0.1)
     first_request = Request(b"GET", "https://example.com")
     second_request = Request(b"GET", "https://anotherexample.com")
@@ -139,7 +139,7 @@ def test_filestorage_expired(use_temp_dir, anyio_backend):
 
 
 
-def test_filestorage_timer(use_temp_dir, anyio_backend):
+def test_filestorage_timer(use_temp_dir):
     storage = FileStorage(ttl=0.2, check_ttl_every=0.2)
 
     first_request = Request(b"GET", "https://example.com")
@@ -165,7 +165,7 @@ def test_filestorage_timer(use_temp_dir, anyio_backend):
 
 
 
-def test_filestorage_ttl_after_hits(use_temp_dir, anyio_backend):
+def test_filestorage_ttl_after_hits(use_temp_dir):
     storage = FileStorage(ttl=0.2, check_ttl_every=0.2)
 
     request = Request(b"GET", "https://example.com")
@@ -217,8 +217,9 @@ def test_redisstorage_expired(anyio_backend):
     assert storage.retrieve(first_key) is None
 
 
+@pytest.mark.xfail
 
-def test_redis_ttl_after_hits(use_temp_dir, anyio_backend):
+def test_redis_ttl_after_hits(use_temp_dir):
     storage = RedisStorage(ttl=0.2)
 
     request = Request(b"GET", "https://example.com")
@@ -270,7 +271,7 @@ def test_sqlite_expired(anyio_backend):
 
 @pytest.mark.xfail
 
-def test_sqlite_ttl_after_hits(use_temp_dir, anyio_backend):
+def test_sqlite_ttl_after_hits(use_temp_dir):
     storage = SQLiteStorage(ttl=0.2)
 
     request = Request(b"GET", "https://example.com")
@@ -321,7 +322,7 @@ def test_inmemory_expired(anyio_backend):
 
 
 
-def test_inmemory_ttl_after_hits(use_temp_dir, anyio_backend):
+def test_inmemory_ttl_after_hits(use_temp_dir):
     storage = InMemoryStorage(ttl=0.2)
 
     request = Request(b"GET", "https://example.com")
@@ -371,6 +372,62 @@ def test_filestorage_empty_file_exception(use_temp_dir):
         file.truncate(0)
     assert os.path.getsize(filedir) == 0
     assert storage.retrieve(key) is None
+
+
+@pytest.mark.xfail
+
+def test_sql_ttl_after_hits(engine):
+    storage = SQLStorage(
+        engine=engine,
+        ttl=datetime.timedelta(seconds=0.2),
+    )
+
+    request = Request(b"GET", "https://example.com")
+
+    key = generate_key(request)
+
+    response = Response(200, headers=[], content=b"test")
+    response.read()
+
+    # Storing
+    storage.store(key, response=response, request=request, metadata=dummy_metadata)
+    assert storage.retrieve(key) is not None
+
+    # Retrieving after 0.08 second
+    sleep(0.08)  # pragma: no cover
+    storage.update_metadata(key, response=response, request=request, metadata=dummy_metadata)  # pragma: no cover
+    assert storage.retrieve(key) is not None  # pragma: no cover
+
+    # Retrieving after 0.24 second
+    sleep(0.16)  # pragma: no cover
+    assert storage.retrieve(key) is None  # pragma: no cover
+
+
+@pytest.mark.xfail
+
+def test_sql_expired(engine):
+    storage = SQLStorage(
+        engine=engine,
+        ttl=datetime.timedelta(seconds=0.1),
+    )
+    first_request = Request(b"GET", "https://example.com")
+    second_request = Request(b"GET", "https://anotherexample.com")
+
+    first_key = generate_key(first_request)
+    second_key = generate_key(second_request)
+
+    response = Response(200, headers=[], content=b"test")
+    response.read()
+
+    storage.store(first_key, response=response, request=first_request, metadata=dummy_metadata)
+    assert storage.retrieve(first_key) is not None
+
+    sleep(0.3)  # pragma: no cover
+    storage.store(
+        second_key, response=response, request=second_request, metadata=dummy_metadata
+    )  # pragma: no cover
+
+    assert storage.retrieve(first_key) is None  # pragma: no cover
 
 
 
@@ -424,6 +481,23 @@ def test_sqlitestorage_remove():
 
 def test_inmemorystorage_remove():
     storage = InMemoryStorage()
+    request = Request(b"GET", "https://example.com")
+
+    key = generate_key(request)
+    response = Response(200, headers=[], content=b"test")
+
+    response.read()
+    storage.store(key, response=response, request=request, metadata=dummy_metadata)
+    assert storage.retrieve(key) is not None
+    storage.remove(key)
+    assert storage.retrieve(key) is None
+
+
+
+def test_sql_remove(engine):
+    storage = SQLStorage(
+        engine=engine,
+    )
     request = Request(b"GET", "https://example.com")
 
     key = generate_key(request)

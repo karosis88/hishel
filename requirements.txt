@@ -1,4 +1,4 @@
--e .[yaml,redis,sqlite,s3]
+-e .[yaml,redis,sqlite,s3,sql]
 
 # linting
 ruff==0.3.0
@@ -16,6 +16,7 @@ anyio==4.4.0
 trio==0.25.0
 coverage==7.6.0
 types-PyYAML==6.0.12.20240311
+aiosqlite==0.20.0
 
 # build
 hatch==1.7.0
