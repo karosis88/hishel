@@ -10,7 +10,7 @@ from hishel._utils import (
     generate_key,
     get_safe_url,
     header_presents,
-    parse_date,
+    parse_date_to_epoch,
 )
 
 
@@ -83,16 +83,12 @@ def test_get_updated_headers():
     assert extract_header_values(update_headers, b"Authorization")[0] == b"secret-key"
 
 
-def test_parse_date():
-    date = "Mon, 25 Aug 2015 12:00:00 GMT"
-    timestamp = parse_date(date)
-    assert timestamp == 1440504000
+def test_parse_date_to_epoch():
+    assert parse_date_to_epoch("Mon, 25 Aug 2015 12:00:00 GMT") == 1440504000
 
 
 def test_float_seconds_to_milliseconds():
-    seconds = 1.234
-    milliseconds = float_seconds_to_int_milliseconds(seconds)
-    assert milliseconds == 1234
+    assert float_seconds_to_int_milliseconds(1.234) == 1234
 
 
 @pytest.mark.parametrize(

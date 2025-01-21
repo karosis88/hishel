@@ -4,6 +4,7 @@
 
 - Fix compatibility with httpx. (#291)
 - Use `SyncByteStream` instead of `ByteStream`. (#298)
+- Remove `clock` argument to `Controller`. (#308)
 
 ## 0.1.1 (2nd Nov, 2024)
 

@@ -16,6 +16,7 @@ anyio==4.7.0
 trio==0.28.0
 coverage==7.6.10
 types-PyYAML==6.0.12.20240311
+freezegun==1.5.1
 
 # build
 hatch==1.9.3

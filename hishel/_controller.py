@@ -1,19 +1,18 @@
 import logging
 import typing as tp
+from datetime import datetime, timezone
 
 from httpcore import Request, Response
 
 from hishel._headers import Vary, parse_cache_control
 
 from ._utils import (
-    BaseClock,
-    Clock,
     extract_header_values,
     extract_header_values_decoded,
     generate_key,
     get_safe_url,
     header_presents,
-    parse_date,
+    parse_date_to_epoch,
 )
 
 logger = logging.getLogger("hishel.controller")
@@ -59,20 +58,20 @@ def get_freshness_lifetime(response: Response) -> tp.Optional[int]:
 
     if header_presents(response.headers, b"expires"):
         expires = extract_header_values_decoded(response.headers, b"expires", single=True)[0]
-        expires_timestamp = parse_date(expires)
+        expires_timestamp = parse_date_to_epoch(expires)
         date = extract_header_values_decoded(response.headers, b"date", single=True)[0]
-        date_timestamp = parse_date(date)
+        date_timestamp = parse_date_to_epoch(date)
 
         return expires_timestamp - date_timestamp
     return None
 
 
-def get_heuristic_freshness(response: Response, clock: "BaseClock") -> int:
+def get_heuristic_freshness(response: Response) -> int:
     last_modified = extract_header_values_decoded(response.headers, b"last-modified", single=True)
 
     if last_modified:
-        last_modified_timestamp = parse_date(last_modified[0])
-        now = clock.now()
+        last_modified_timestamp = parse_date_to_epoch(last_modified[0])
+        now = int(datetime.now(timezone.utc).timestamp())
 
         ONE_WEEK = 604_800
 
@@ -82,18 +81,15 @@ def get_heuristic_freshness(response: Response, clock: "BaseClock") -> int:
     return ONE_DAY
 
 
-def get_age(response: Response, clock: "BaseClock") -> int:
+def get_age(response: Response) -> int:
     if not header_presents(response.headers, b"date"):
         # If the response does not have a date header, then it is impossible to calculate the age.
         # Instead of raising an exception, we return infinity to be sure that the response is not considered fresh.
         return float("inf")  # type: ignore
 
-    date = parse_date(extract_header_values_decoded(response.headers, b"date")[0])
+    date = parse_date_to_epoch(extract_header_values_decoded(response.headers, b"date")[0])
 
-    now = clock.now()
-
-    apparent_age = max(0, now - date)
-    return int(apparent_age)
+    return max(0, int(datetime.now(timezone.utc).timestamp()) - date)
 
 
 def allowed_stale(response: Response) -> bool:
@@ -115,7 +111,6 @@ class Controller:
         cacheable_status_codes: tp.Optional[tp.List[int]] = None,
         cache_private: bool = True,
         allow_heuristics: bool = False,
-        clock: tp.Optional[BaseClock] = None,
         allow_stale: bool = False,
         always_revalidate: bool = False,
         force_cache: bool = False,
@@ -136,7 +131,6 @@ class Controller:
 
         self._cacheable_status_codes = cacheable_status_codes if cacheable_status_codes else [200, 301, 308]
         self._cache_private = cache_private
-        self._clock = clock if clock else Clock()
         self._allow_heuristics = allow_heuristics
         self._allow_stale = allow_stale
         self._always_revalidate = always_revalidate
@@ -451,7 +445,7 @@ class Controller:
                 )
             )
             if self._allow_heuristics and response.status in HEURISTICALLY_CACHEABLE_STATUS_CODES:
-                freshness_lifetime = get_heuristic_freshness(response=response, clock=self._clock)
+                freshness_lifetime = get_heuristic_freshness(response=response)
                 logger.debug(
                     (
                         f"Successfully calculated the freshness lifetime of the resource located at "
@@ -470,7 +464,7 @@ class Controller:
                 self._make_request_conditional(request=request, response=response)
                 return request
 
-        age = get_age(response, self._clock)
+        age = get_age(response)
         is_fresh = freshness_lifetime > age
 
         # The min-fresh request directive indicates that the client

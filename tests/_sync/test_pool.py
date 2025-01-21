@@ -3,10 +3,11 @@ import typing as tp
 import httpcore
 import pytest
 import sniffio
+from freezegun import freeze_time
 from httpcore._models import Request, Response
 
 import hishel
-from hishel._utils import BaseClock, extract_header_values, extract_header_values_decoded, header_presents
+from hishel._utils import extract_header_values, extract_header_values_decoded, header_presents
 
 
 
@@ -162,11 +163,8 @@ def test_pool_with_only_if_cached_directive_with_stored_response():
 
 
 
+@freeze_time("Mon, 25 Aug 2015 12:00:01 GMT")
 def test_pool_with_cache_disabled_extension():
-    class MockedClock(BaseClock):
-        def now(self) -> int:
-            return 1440504001  # Mon, 25 Aug 2015 12:00:01 GMT
-
     cachable_response = httpcore.Response(
         200,
         headers=[
@@ -177,9 +175,7 @@ def test_pool_with_cache_disabled_extension():
 
     with hishel.MockConnectionPool() as pool:
         pool.add_responses([cachable_response, httpcore.Response(201)])
-        with hishel.CacheConnectionPool(
-            pool=pool, controller=hishel.Controller(clock=MockedClock()), storage=hishel.InMemoryStorage()
-        ) as cache_transport:
+        with hishel.CacheConnectionPool(pool=pool, storage=hishel.InMemoryStorage()) as cache_transport:
             request = httpcore.Request("GET", "https://www.example.com")
             # This should create a cache entry
             cache_transport.handle_request(request)
@@ -258,144 +254,133 @@ def test_pool_caching_post_method():
 
 
 def test_revalidation_with_new_content():
-    class MockedClock(BaseClock):
-        current = 1440504000  # Mon, 25 Aug 2015 12:00:00 GMT
+    with freeze_time("Mon, 25 Aug 2015 12:00:00 GMT") as frozen_datetime:
+        storage = hishel.InMemoryStorage()
 
-        def now(self) -> int:
-            return self.current
+        with hishel.MockConnectionPool() as pool:
+            pool.add_responses(
+                [
+                    httpcore.Response(
+                        200,
+                        headers=[
+                            (b"Cache-Control", b"max-age=1"),
+                            (b"Date", b"Mon, 25 Aug 2015 12:00:00 GMT"),
+                        ],
+                        content=b"Hello, World.",
+                    ),
+                    httpcore.Response(
+                        200,
+                        headers=[
+                            (b"Cache-Control", b"max-age=10"),
+                            (b"Date", b"Mon, 25 Aug 2015 12:00:01 GMT"),
+                        ],
+                        content=b"Eat at Joe's.",
+                    ),
+                    httpcore.Response(
+                        304,
+                        headers=[
+                            (b"Cache-Control", b"max-age=10"),
+                            (b"Date", b"Mon, 25 Aug 2015 12:00:11 GMT"),
+                        ],
+                    ),
+                ]
+            )
+            with hishel.CacheConnectionPool(pool=pool, storage=storage) as cache_pool:
+                # Miss, 200, store
+                response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
+                assert not response.extensions["from_cache"]
 
-    clock = MockedClock()
-    controller = hishel.Controller(clock=clock)
-    storage = hishel.InMemoryStorage()
+                # Hit
+                response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
+                assert response.extensions["from_cache"]
+                assert response.extensions["cache_metadata"]["number_of_uses"] == 1
 
-    with hishel.MockConnectionPool() as pool:
-        pool.add_responses(
-            [
-                httpcore.Response(
-                    200,
-                    headers=[
-                        (b"Cache-Control", b"max-age=1"),
-                        (b"Date", b"Mon, 25 Aug 2015 12:00:00 GMT"),
-                    ],
-                    content=b"Hello, World.",
-                ),
-                httpcore.Response(
-                    200,
-                    headers=[
-                        (b"Cache-Control", b"max-age=10"),
-                        (b"Date", b"Mon, 25 Aug 2015 12:00:01 GMT"),
-                    ],
-                    content=b"Eat at Joe's.",
-                ),
-                httpcore.Response(
-                    304,
-                    headers=[
-                        (b"Cache-Control", b"max-age=10"),
-                        (b"Date", b"Mon, 25 Aug 2015 12:00:11 GMT"),
-                    ],
-                ),
-            ]
-        )
-        with hishel.CacheConnectionPool(pool=pool, controller=controller, storage=storage) as cache_pool:
-            # Miss, 200, store
-            response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
-            assert not response.extensions["from_cache"]
+                # Cache contains the first response content
+                stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
+                assert stored
+                stored_response, stored_request, stored_metadata = stored
+                assert extract_header_values_decoded(stored_response.headers, b"Date") == [
+                    "Mon, 25 Aug 2015 12:00:00 GMT"
+                ]
+                assert stored_response.content == b"Hello, World."
 
-            # Hit
-            response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
-            assert response.extensions["from_cache"]
-            assert response.extensions["cache_metadata"]["number_of_uses"] == 1
+                # tic, tac... one second passed
+                frozen_datetime.tick()  # one second passed
 
-            # Cache contains the first response content
-            stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
-            assert stored
-            stored_response, stored_request, stored_metadata = stored
-            assert extract_header_values_decoded(stored_response.headers, b"Date") == ["Mon, 25 Aug 2015 12:00:00 GMT"]
-            assert stored_response.content == b"Hello, World."
+                # Miss (expired), send revalidation, 200, store
+                response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
+                assert not response.extensions["from_cache"]
 
-            # tic, tac... one second passed
-            clock.current += 1  # one second passed
+                # Hit (cf issue #239)
+                response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
+                assert response.extensions["from_cache"]
+                assert response.extensions["cache_metadata"]["number_of_uses"] == 1
 
-            # Miss (expired), send revalidation, 200, store
-            response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
-            assert not response.extensions["from_cache"]
+                # Cache was updated and contains the second response content
+                stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
+                assert stored
+                stored_response, stored_request, stored_metadata = stored
+                assert extract_header_values_decoded(stored_response.headers, b"Date") == [
+                    "Mon, 25 Aug 2015 12:00:01 GMT"
+                ]
+                assert stored_response.content == b"Eat at Joe's."
 
-            # Hit (cf issue #239)
-            response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
-            assert response.extensions["from_cache"]
-            assert response.extensions["cache_metadata"]["number_of_uses"] == 1
+                # tic, tac, tic, tac... ten more seconds passed, let's check the 304 behavious is not broken
+                frozen_datetime.tick(10)
 
-            # Cache was updated and contains the second response content
-            stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
-            assert stored
-            stored_response, stored_request, stored_metadata = stored
-            assert extract_header_values_decoded(stored_response.headers, b"Date") == ["Mon, 25 Aug 2015 12:00:01 GMT"]
-            assert stored_response.content == b"Eat at Joe's."
-
-            # tic, tac, tic, tac... ten more seconds passed, let's check the 304 behavious is not broken
-            clock.current += 10
-
-            # Miss (expired), send revalidation, 304, update metadata but keep previous content
-            response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
-            assert response.extensions["from_cache"]
-            assert response.extensions["cache_metadata"]["number_of_uses"] == 2
-            stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
-            assert stored
-            stored_response, stored_request, stored_metadata = stored
-            assert extract_header_values_decoded(stored_response.headers, b"Date") == ["Mon, 25 Aug 2015 12:00:11 GMT"]
-            assert stored_response.content == b"Eat at Joe's."
+                # Miss (expired), send revalidation, 304, update metadata but keep previous content
+                response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com/"))
+                assert response.extensions["from_cache"]
+                assert response.extensions["cache_metadata"]["number_of_uses"] == 2
+                stored = storage.retrieve(response.extensions["cache_metadata"]["cache_key"])
+                assert stored
+                stored_response, stored_request, stored_metadata = stored
+                assert extract_header_values_decoded(stored_response.headers, b"Date") == [
+                    "Mon, 25 Aug 2015 12:00:11 GMT"
+                ]
+                assert stored_response.content == b"Eat at Joe's."
 
 
 
 def test_poool_revalidation_forward_extensions():
-    class MockedClock(BaseClock):
-        current = 1440504000  # Mon, 25 Aug 2015 12:00:00 GMT
-
-        def now(self) -> int:
-            return self.current
-
     class MockedConnectionPoolWithExtensionsMemory(hishel.MockConnectionPool):
         def handle_request(self, request: httpcore.Request) -> httpcore.Response:
             self.last_request_extensions = request.extensions
             return super().handle_request(request)
 
-    clock = MockedClock()
-    controller = hishel.Controller(clock=clock)
-
-    with MockedConnectionPoolWithExtensionsMemory() as pool:
-        pool.add_responses(
-            [
-                httpcore.Response(
-                    200,
-                    headers=[
-                        (b"Cache-Control", b"max-age=1"),
-                        (b"Date", b"Mon, 25 Aug 2015 12:00:00 GMT"),
-                    ],
-                ),
-                httpcore.Response(
-                    304,
-                    headers=[
-                        (b"Cache-Control", b"max-age=1"),
-                        (b"Date", b"Mon, 25 Aug 2015 12:00:01 GMT"),
-                    ],
-                ),
-            ]
-        )
-        with hishel.CacheConnectionPool(
-            pool=pool, controller=controller, storage=hishel.InMemoryStorage()
-        ) as cache_pool:
-            # first request with extensions
-            cache_pool.handle_request(
-                httpcore.Request("GET", "https://www.example.com", extensions={"foo": "bar"})
+    with freeze_time("Mon, 25 Aug 2015 12:00:00 GMT") as frozen_datetime:
+        with MockedConnectionPoolWithExtensionsMemory() as pool:
+            pool.add_responses(
+                [
+                    httpcore.Response(
+                        200,
+                        headers=[
+                            (b"Cache-Control", b"max-age=1"),
+                            (b"Date", b"Mon, 25 Aug 2015 12:00:00 GMT"),
+                        ],
+                    ),
+                    httpcore.Response(
+                        304,
+                        headers=[
+                            (b"Cache-Control", b"max-age=1"),
+                            (b"Date", b"Mon, 25 Aug 2015 12:00:01 GMT"),
+                        ],
+                    ),
+                ]
             )
-            assert pool.last_request_extensions["foo"] == "bar"
+            with hishel.CacheConnectionPool(pool=pool, storage=hishel.InMemoryStorage()) as cache_pool:
+                # first request with extensions
+                cache_pool.handle_request(
+                    httpcore.Request("GET", "https://www.example.com", extensions={"foo": "bar"})
+                )
+                assert pool.last_request_extensions["foo"] == "bar"
 
-            # cache expires
-            clock.current += 1
+                # cache expires
+                frozen_datetime.tick()
 
-            # second request with extensions that should be passed to revalidation request
-            response = cache_pool.handle_request(
-                httpcore.Request("GET", "https://www.example.com", extensions={"foo": "baz"})
-            )
-            assert response.extensions["revalidated"] is True
-            assert pool.last_request_extensions["foo"] == "baz"
+                # second request with extensions that should be passed to revalidation request
+                response = cache_pool.handle_request(
+                    httpcore.Request("GET", "https://www.example.com", extensions={"foo": "baz"})
+                )
+                assert response.extensions["revalidated"] is True
+                assert pool.last_request_extensions["foo"] == "baz"
