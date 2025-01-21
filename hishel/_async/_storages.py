@@ -178,15 +178,10 @@ class AsyncFileStorage(AsyncBaseStorage):
 
         async with self._lock:
             if response_path.exists():
-                atime = response_path.stat().st_atime
-                old_mtime = response_path.stat().st_mtime
                 await self._file_manager.write_to(
                     str(response_path),
                     self._serializer.dumps(response=response, request=request, metadata=metadata),
                 )
-
-                # Restore the old atime and mtime (we use mtime to check the cache expiration time)
-                os.utime(response_path, (atime, old_mtime))
                 return
 
         return await self.store(key, response, request, metadata)  # pragma: no cover
@@ -219,10 +214,12 @@ class AsyncFileStorage(AsyncBaseStorage):
             return
 
         if time.monotonic() - self._last_cleaned < self._check_ttl_every:
-            if response_path.is_file():
-                age = time.time() - response_path.stat().st_mtime
-                if age > self._ttl:
-                    response_path.unlink()
+            # Use ctime.
+            # On Windows, this is the time the file was created; on Unix, it's
+            # the last time the file's metadata (permissions etc.) have changed.
+            # Both is good enough to determine a file's age.
+            if response_path.is_file() and (time.time() - response_path.stat().st_ctime) > self._ttl:
+                response_path.unlink()
             return
 
         self._last_cleaned = time.monotonic()
@@ -230,10 +227,9 @@ class AsyncFileStorage(AsyncBaseStorage):
             with os.scandir(self._base_path) as entries:
                 for entry in entries:
                     try:
-                        if entry.is_file():
-                            age = time.time() - entry.stat().st_mtime
-                            if age > self._ttl:
-                                os.unlink(entry.path)
+                        # See comment on ctime above.
+                        if entry.is_file() and (time.time() - entry.stat().st_ctime) > self._ttl:
+                            os.unlink(entry.path)
                     except FileNotFoundError:  # pragma: no cover
                         pass
 
