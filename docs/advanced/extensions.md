@@ -80,9 +80,9 @@ True
 
 ### cache_metadata
 
-If `from_cache` is `True`, the response will also include a `cache_metadata` extension with additional information about 
-the response retrieved from the cache. If `from_cache` is `False`, then `cache_metadata` will not
-be present in the response extensions.
+If the cache is created or used, the response will also include a
+`cache_metadata` extension with additional information about the response
+retrieved from the cache.
 
 Example:
 
@@ -93,17 +93,11 @@ Example:
 >>> response.extensions
 {
     ... # other extensions
-    "from_cache": False
-}
->>> response = client.get("https://www.example.com/cacheable-endpoint")
->>> response.extensions
-{
-    ... # other extensions
-    "from_cache": True
+    "from_cache": False,
     "cache_metadata" : {
-        "cache_key': '1a4c648c9a61adf939eef934a73e0cbe',
+        'cache_key': '1a4c648c9a61adf939eef934a73e0cbe',
         'created_at': datetime.datetime(2020, 1, 1, 0, 0, 0),
-        'number_of_uses': 1,
+        'number_of_uses': 0,
     }
 }
 ```

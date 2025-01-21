@@ -399,3 +399,18 @@ def test_poool_revalidation_forward_extensions():
             )
             assert response.extensions["revalidated"] is True
             assert pool.last_request_extensions["foo"] == "baz"
+
+
+
+def test_pool_returns_metadata_for_new_cached_responses():
+    with hishel.MockConnectionPool() as pool:
+        pool.add_responses([httpcore.Response(308), httpcore.Response(200)])
+
+        with hishel.CacheConnectionPool(pool=pool, storage=hishel.InMemoryStorage()) as cache_pool:
+            first_response = cache_pool.handle_request(httpcore.Request("GET", "https://example.com"))
+            second_response = cache_pool.handle_request(
+                httpcore.Request("GET", "https://anotherexample.com")
+            )
+
+            assert "cache_metadata" in first_response.extensions
+            assert "cache_metadata" not in second_response.extensions

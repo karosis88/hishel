@@ -428,3 +428,20 @@ def test_transport_revalidation_forward_extensions():
             )
             assert response.extensions["revalidated"] is True
             assert transport.last_request_extensions["foo"] == "baz"
+
+
+
+def test_transport_returns_metadata_for_new_cached_responses():
+    with hishel.MockTransport() as transport:
+        transport.add_responses([httpx.Response(308), httpx.Response(200)])
+
+        with hishel.CacheTransport(
+            transport=transport, storage=hishel.InMemoryStorage()
+        ) as cache_transport:
+            first_response = cache_transport.handle_request(httpx.Request("GET", "https://example.com"))
+            second_response = cache_transport.handle_request(
+                httpx.Request("GET", "https://anotherexample.com")
+            )
+
+            assert "cache_metadata" in first_response.extensions
+            assert "cache_metadata" not in second_response.extensions

@@ -428,3 +428,20 @@ async def test_transport_revalidation_forward_extensions():
             )
             assert response.extensions["revalidated"] is True
             assert transport.last_request_extensions["foo"] == "baz"
+
+
+@pytest.mark.anyio
+async def test_transport_returns_metadata_for_new_cached_responses():
+    async with hishel.MockAsyncTransport() as transport:
+        transport.add_responses([httpx.Response(308), httpx.Response(200)])
+
+        async with hishel.AsyncCacheTransport(
+            transport=transport, storage=hishel.AsyncInMemoryStorage()
+        ) as cache_transport:
+            first_response = await cache_transport.handle_async_request(httpx.Request("GET", "https://example.com"))
+            second_response = await cache_transport.handle_async_request(
+                httpx.Request("GET", "https://anotherexample.com")
+            )
+
+            assert "cache_metadata" in first_response.extensions
+            assert "cache_metadata" not in second_response.extensions

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import types
 import typing as tp
 
@@ -221,11 +222,13 @@ class CacheTransport(httpx.BaseTransport):
         httpcore_regular_response.read()
         httpcore_regular_response.close()
 
+        new_metadata = None
         if self._controller.is_cachable(request=httpcore_request, response=httpcore_regular_response):
+            new_metadata = Metadata(
+                cache_key=key, created_at=datetime.datetime.now(datetime.timezone.utc), number_of_uses=0
+            )
             self._storage.store(
-                key,
-                response=httpcore_regular_response,
-                request=httpcore_request,
+                key, response=httpcore_regular_response, request=httpcore_request, metadata=new_metadata
             )
 
         return self._create_hishel_response(
@@ -234,6 +237,7 @@ class CacheTransport(httpx.BaseTransport):
             request=httpcore_request,
             cached=False,
             revalidated=False,
+            metadata=new_metadata,
         )
 
     def _create_hishel_response(
@@ -243,17 +247,19 @@ class CacheTransport(httpx.BaseTransport):
         request: httpcore.Request,
         cached: bool,
         revalidated: bool,
-        metadata: Metadata | None = None,
+        metadata: Metadata | None,
     ) -> Response:
         if cached:
             assert metadata
             metadata["number_of_uses"] += 1
             self._storage.update_metadata(key=key, request=request, response=response, metadata=metadata)
             response.extensions["from_cache"] = True  # type: ignore[index]
-            response.extensions["cache_metadata"] = metadata  # type: ignore[index]
         else:
             response.extensions["from_cache"] = False  # type: ignore[index]
         response.extensions["revalidated"] = revalidated  # type: ignore[index]
+
+        if metadata is not None:
+            response.extensions["cache_metadata"] = metadata  # type: ignore[index]
         return Response(
             status_code=response.status,
             headers=response.headers,

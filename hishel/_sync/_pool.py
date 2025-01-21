@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import types
 import typing as tp
 
@@ -156,11 +157,15 @@ class CacheConnectionPool(RequestInterface):
         regular_response = self._pool.handle_request(request)
         regular_response.read()
 
+        new_metadata = None
         if self._controller.is_cachable(request=request, response=regular_response):
-            self._storage.store(key, response=regular_response, request=request)
+            new_metadata = Metadata(
+                cache_key=key, created_at=datetime.datetime.now(datetime.timezone.utc), number_of_uses=0
+            )
+            self._storage.store(key, response=regular_response, request=request, metadata=new_metadata)
 
         return self._create_hishel_response(
-            key=key, response=regular_response, request=request, cached=False, revalidated=False
+            key=key, response=regular_response, request=request, cached=False, revalidated=False, metadata=new_metadata
         )
 
     def _create_hishel_response(
@@ -177,9 +182,11 @@ class CacheConnectionPool(RequestInterface):
             metadata["number_of_uses"] += 1
             self._storage.update_metadata(key=key, request=request, response=response, metadata=metadata)
             response.extensions["from_cache"] = True  # type: ignore[index]
-            response.extensions["cache_metadata"] = metadata  # type: ignore[index]
         else:
             response.extensions["from_cache"] = False  # type: ignore[index]
+
+        if metadata is not None:
+            response.extensions["cache_metadata"] = metadata  # type: ignore[index]
         response.extensions["revalidated"] = revalidated  # type: ignore[index]
         return response
 

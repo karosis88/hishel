@@ -399,3 +399,18 @@ async def test_poool_revalidation_forward_extensions():
             )
             assert response.extensions["revalidated"] is True
             assert pool.last_request_extensions["foo"] == "baz"
+
+
+@pytest.mark.anyio
+async def test_pool_returns_metadata_for_new_cached_responses():
+    async with hishel.MockAsyncConnectionPool() as pool:
+        pool.add_responses([httpcore.Response(308), httpcore.Response(200)])
+
+        async with hishel.AsyncCacheConnectionPool(pool=pool, storage=hishel.AsyncInMemoryStorage()) as cache_pool:
+            first_response = await cache_pool.handle_async_request(httpcore.Request("GET", "https://example.com"))
+            second_response = await cache_pool.handle_async_request(
+                httpcore.Request("GET", "https://anotherexample.com")
+            )
+
+            assert "cache_metadata" in first_response.extensions
+            assert "cache_metadata" not in second_response.extensions
