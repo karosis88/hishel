@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import json
 import pickle
@@ -46,10 +48,10 @@ class Metadata(tp.TypedDict):
 
 
 class BaseSerializer:
-    def dumps(self, response: Response, request: Request, metadata: Metadata) -> tp.Union[str, bytes]:
+    def dumps(self, response: Response, request: Request, metadata: Metadata) -> str | bytes:
         raise NotImplementedError()
 
-    def loads(self, data: tp.Union[str, bytes]) -> tp.Tuple[Response, Request, Metadata]:
+    def loads(self, data: str | bytes) -> tuple[Response, Request, Metadata]:
         raise NotImplementedError()
 
     @property
@@ -62,7 +64,7 @@ class PickleSerializer(BaseSerializer):
     A simple pickle-based serializer.
     """
 
-    def dumps(self, response: Response, request: Request, metadata: Metadata) -> tp.Union[str, bytes]:
+    def dumps(self, response: Response, request: Request, metadata: Metadata) -> str | bytes:
         """
         Dumps the HTTP response and its HTTP request.
 
@@ -73,23 +75,23 @@ class PickleSerializer(BaseSerializer):
         :param metadata: Additional information about the stored response
         :type metadata: Metadata
         :return: Serialized response
-        :rtype: tp.Union[str, bytes]
+        :rtype: str | bytes
         """
         clone_response = clone_model(response)
         clone_request = clone_model(request)
         return pickle.dumps((clone_response, clone_request, metadata))
 
-    def loads(self, data: tp.Union[str, bytes]) -> tp.Tuple[Response, Request, Metadata]:
+    def loads(self, data: str | bytes) -> tuple[Response, Request, Metadata]:
         """
         Loads the HTTP response and its HTTP request from serialized data.
 
         :param data: Serialized data
-        :type data: tp.Union[str, bytes]
+        :type data: str | bytes
         :return: HTTP response and its HTTP request
-        :rtype: tp.Tuple[Response, Request, Metadata]
+        :rtype: tuple[Response, Request, Metadata]
         """
         assert isinstance(data, bytes)
-        return tp.cast(tp.Tuple[Response, Request, Metadata], pickle.loads(data))
+        return tp.cast(tuple[Response, Request, Metadata], pickle.loads(data))
 
     @property
     def is_binary(self) -> bool:  # pragma: no cover
@@ -99,7 +101,7 @@ class PickleSerializer(BaseSerializer):
 class JSONSerializer(BaseSerializer):
     """A simple json-based serializer."""
 
-    def dumps(self, response: Response, request: Request, metadata: Metadata) -> tp.Union[str, bytes]:
+    def dumps(self, response: Response, request: Request, metadata: Metadata) -> str | bytes:
         """
         Dumps the HTTP response and its HTTP request.
 
@@ -110,7 +112,7 @@ class JSONSerializer(BaseSerializer):
         :param metadata: Additional information about the stored response
         :type metadata: Metadata
         :return: Serialized response
-        :rtype: tp.Union[str, bytes]
+        :rtype: str | bytes
         """
         response_dict = {
             "status": response.status,
@@ -148,14 +150,14 @@ class JSONSerializer(BaseSerializer):
 
         return json.dumps(full_json, indent=4)
 
-    def loads(self, data: tp.Union[str, bytes]) -> tp.Tuple[Response, Request, Metadata]:
+    def loads(self, data: str | bytes) -> tuple[Response, Request, Metadata]:
         """
         Loads the HTTP response and its HTTP request from serialized data.
 
         :param data: Serialized data
-        :type data: tp.Union[str, bytes]
+        :type data: str | bytes
         :return: HTTP response and its HTTP request
-        :rtype: tp.Tuple[Response, Request, Metadata]
+        :rtype: tuple[Response, Request, Metadata]
         """
 
         full_json = json.loads(data)
@@ -209,7 +211,7 @@ class JSONSerializer(BaseSerializer):
 class YAMLSerializer(BaseSerializer):
     """A simple yaml-based serializer."""
 
-    def dumps(self, response: Response, request: Request, metadata: Metadata) -> tp.Union[str, bytes]:
+    def dumps(self, response: Response, request: Request, metadata: Metadata) -> str | bytes:
         """
         Dumps the HTTP response and its HTTP request.
 
@@ -220,7 +222,7 @@ class YAMLSerializer(BaseSerializer):
         :param metadata: Additional information about the stored response
         :type metadata: Metadata
         :return: Serialized response
-        :rtype: tp.Union[str, bytes]
+        :rtype: str | bytes
         """
         if yaml is None:  # pragma: no cover
             raise RuntimeError(
@@ -264,15 +266,15 @@ class YAMLSerializer(BaseSerializer):
 
         return yaml.safe_dump(full_json, sort_keys=False)
 
-    def loads(self, data: tp.Union[str, bytes]) -> tp.Tuple[Response, Request, Metadata]:
+    def loads(self, data: str | bytes) -> tuple[Response, Request, Metadata]:
         """
         Loads the HTTP response and its HTTP request from serialized data.
 
         :param data: Serialized data
-        :type data: tp.Union[str, bytes]
+        :type data: str | bytes
         :raises RuntimeError: When used without the `yaml` extension installed
         :return: HTTP response and its HTTP request
-        :rtype: tp.Tuple[Response, Request, Metadata]
+        :rtype: tuple[Response, Request, Metadata]
         """
         if yaml is None:  # pragma: no cover
             raise RuntimeError(

@@ -4,7 +4,6 @@ import datetime
 import logging
 import os
 import time
-import typing as t
 import typing as tp
 import warnings
 from copy import deepcopy
@@ -24,7 +23,7 @@ except ImportError:  # pragma: no cover
 
 from httpcore import Request, Response
 
-if t.TYPE_CHECKING:  # pragma: no cover
+if tp.TYPE_CHECKING:  # pragma: no cover
     from typing_extensions import TypeAlias
 
 from hishel._serializers import BaseSerializer, clone_model
@@ -45,7 +44,7 @@ __all__ = (
     "S3Storage",
 )
 
-StoredResponse: TypeAlias = tp.Tuple[Response, Request, Metadata]
+StoredResponse: TypeAlias = tuple[Response, Request, Metadata]
 RemoveTypes = tp.Union[str, Response]
 
 try:
@@ -57,8 +56,8 @@ except ImportError:  # pragma: no cover
 class BaseStorage:
     def __init__(
         self,
-        serializer: tp.Optional[BaseSerializer] = None,
-        ttl: tp.Optional[tp.Union[int, float]] = None,
+        serializer: BaseSerializer | None = None,
+        ttl: int | float | None = None,
     ) -> None:
         self._serializer = serializer or JSONSerializer()
         self._ttl = ttl
@@ -72,7 +71,7 @@ class BaseStorage:
     def update_metadata(self, key: str, response: Response, request: Request, metadata: Metadata) -> None:
         raise NotImplementedError()
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         raise NotImplementedError()
 
     def close(self) -> None:
@@ -84,22 +83,22 @@ class FileStorage(BaseStorage):
     A simple file storage.
 
     :param serializer: Serializer capable of serializing and de-serializing http responses, defaults to None
-    :type serializer: tp.Optional[BaseSerializer], optional
+    :type serializer: BaseSerializer | None, optional
     :param base_path: A storage base path where the responses should be saved, defaults to None
-    :type base_path: tp.Optional[Path], optional
+    :type base_path: Path | None, optional
     :param ttl: Specifies the maximum number of seconds that the response can be cached, defaults to None
-    :type ttl: tp.Optional[tp.Union[int, float]], optional
+    :type ttl: int | float | None, optional
     :param check_ttl_every: How often in seconds to check staleness of **all** cache files.
         Makes sense only with set `ttl`, defaults to 60
-    :type check_ttl_every: tp.Union[int, float]
+    :type check_ttl_every: int | float
     """
 
     def __init__(
         self,
-        serializer: tp.Optional[BaseSerializer] = None,
-        base_path: tp.Optional[Path] = None,
-        ttl: tp.Optional[tp.Union[int, float]] = None,
-        check_ttl_every: tp.Union[int, float] = 60,
+        serializer: BaseSerializer | None = None,
+        base_path: Path | None = None,
+        ttl: int | float | None = None,
+        check_ttl_every: int | float = 60,
     ) -> None:
         super().__init__(serializer, ttl)
 
@@ -153,7 +152,7 @@ class FileStorage(BaseStorage):
         """
 
         if isinstance(key, Response):  # pragma: no cover
-            key = t.cast(str, key.extensions["cache_metadata"]["cache_key"])
+            key = tp.cast(str, key.extensions["cache_metadata"]["cache_key"])
 
         response_path = self._base_path / key
 
@@ -191,14 +190,14 @@ class FileStorage(BaseStorage):
 
         return self.store(key, response, request, metadata)  # pragma: no cover
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         """
         Retreives the response from the cache using his key.
 
         :param key: Hashed value of concatenated HTTP method and URI
         :type key: str
         :return: An HTTP response and his HTTP request.
-        :rtype: tp.Optional[StoredResponse]
+        :rtype: StoredResponse | None
         """
 
         response_path = self._base_path / key
@@ -243,18 +242,18 @@ class SQLiteStorage(BaseStorage):
     A simple sqlite3 storage.
 
     :param serializer: Serializer capable of serializing and de-serializing http responses, defaults to None
-    :type serializer: tp.Optional[BaseSerializer], optional
+    :type serializer: BaseSerializer | None, optional
     :param connection: A connection for sqlite, defaults to None
-    :type connection: tp.Optional[sqlite3.Connection], optional
+    :type connection: sqlite3.Connection | None, optional
     :param ttl: Specifies the maximum number of seconds that the response can be cached, defaults to None
-    :type ttl: tp.Optional[tp.Union[int, float]], optional
+    :type ttl: int | float | None, optional
     """
 
     def __init__(
         self,
-        serializer: tp.Optional[BaseSerializer] = None,
-        connection: tp.Optional[sqlite3.Connection] = None,
-        ttl: tp.Optional[tp.Union[int, float]] = None,
+        serializer: BaseSerializer | None = None,
+        connection: sqlite3.Connection | None = None,
+        ttl: int | float | None = None,
     ) -> None:
         if sqlite3 is None:  # pragma: no cover
             raise RuntimeError(
@@ -264,7 +263,7 @@ class SQLiteStorage(BaseStorage):
             )
         super().__init__(serializer, ttl)
 
-        self._connection: tp.Optional[sqlite3.Connection] = connection or None
+        self._connection: sqlite3.Connection | None = connection or None
         self._setup_lock = Lock()
         self._setup_completed: bool = False
         self._lock = Lock()
@@ -322,7 +321,7 @@ class SQLiteStorage(BaseStorage):
         assert self._connection
 
         if isinstance(key, Response):  # pragma: no cover
-            key = t.cast(str, key.extensions["cache_metadata"]["cache_key"])
+            key = tp.cast(str, key.extensions["cache_metadata"]["cache_key"])
 
         with self._lock:
             self._connection.execute("DELETE FROM cache WHERE key = ?", [key])
@@ -355,14 +354,14 @@ class SQLiteStorage(BaseStorage):
                 return
         return self.store(key, response, request, metadata)  # pragma: no cover
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         """
         Retreives the response from the cache using his key.
 
         :param key: Hashed value of concatenated HTTP method and URI
         :type key: str
         :return: An HTTP response and its HTTP request.
-        :rtype: tp.Optional[StoredResponse]
+        :rtype: StoredResponse | None
         """
 
         self._setup()
@@ -397,18 +396,18 @@ class RedisStorage(BaseStorage):
     A simple redis storage.
 
     :param serializer: Serializer capable of serializing and de-serializing http responses, defaults to None
-    :type serializer: tp.Optional[BaseSerializer], optional
+    :type serializer: BaseSerializer | None, optional
     :param client: A client for redis, defaults to None
-    :type client: tp.Optional["redis.Redis"], optional
+    :type client: redis.Redis | None, optional
     :param ttl: Specifies the maximum number of seconds that the response can be cached, defaults to None
-    :type ttl: tp.Optional[tp.Union[int, float]], optional
+    :type ttl: int | float | None, optional
     """
 
     def __init__(
         self,
-        serializer: tp.Optional[BaseSerializer] = None,
-        client: tp.Optional[redis.Redis] = None,  # type: ignore
-        ttl: tp.Optional[tp.Union[int, float]] = None,
+        serializer: BaseSerializer | None = None,
+        client: redis.Redis | None = None,  # type: ignore
+        ttl: int | float | None = None,
     ) -> None:
         if redis is None:  # pragma: no cover
             raise RuntimeError(
@@ -459,7 +458,7 @@ class RedisStorage(BaseStorage):
         """
 
         if isinstance(key, Response):  # pragma: no cover
-            key = t.cast(str, key.extensions["cache_metadata"]["cache_key"])
+            key = tp.cast(str, key.extensions["cache_metadata"]["cache_key"])
 
         self._client.delete(key)
 
@@ -490,14 +489,14 @@ class RedisStorage(BaseStorage):
                 px=ttl_in_milliseconds,
             )
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         """
         Retreives the response from the cache using his key.
 
         :param key: Hashed value of concatenated HTTP method and URI
         :type key: str
         :return: An HTTP response and its HTTP request.
-        :rtype: tp.Optional[StoredResponse]
+        :rtype: StoredResponse | None
         """
 
         cached_response = self._client.get(key)
@@ -515,17 +514,17 @@ class InMemoryStorage(BaseStorage):
     A simple in-memory storage.
 
     :param serializer: Serializer capable of serializing and de-serializing http responses, defaults to None
-    :type serializer: tp.Optional[BaseSerializer], optional
+    :type serializer: BaseSerializer | None, optional
     :param ttl: Specifies the maximum number of seconds that the response can be cached, defaults to None
-    :type ttl: tp.Optional[tp.Union[int, float]], optional
+    :type ttl: int | float | None, optional
     :param capacity: The maximum number of responses that can be cached, defaults to 128
     :type capacity: int, optional
     """
 
     def __init__(
         self,
-        serializer: tp.Optional[BaseSerializer] = None,
-        ttl: tp.Optional[tp.Union[int, float]] = None,
+        serializer: BaseSerializer | None = None,
+        ttl: int | float | None = None,
         capacity: int = 128,
     ) -> None:
         super().__init__(serializer, ttl)
@@ -535,7 +534,7 @@ class InMemoryStorage(BaseStorage):
 
         from hishel import LFUCache
 
-        self._cache: LFUCache[str, tp.Tuple[StoredResponse, float]] = LFUCache(capacity=capacity)
+        self._cache: LFUCache[str, tuple[StoredResponse, float]] = LFUCache(capacity=capacity)
         self._lock = Lock()
 
     def store(self, key: str, response: Response, request: Request, metadata: Metadata | None = None) -> None:
@@ -572,7 +571,7 @@ class InMemoryStorage(BaseStorage):
         """
 
         if isinstance(key, Response):  # pragma: no cover
-            key = t.cast(str, key.extensions["cache_metadata"]["cache_key"])
+            key = tp.cast(str, key.extensions["cache_metadata"]["cache_key"])
 
         with self._lock:
             self._cache.remove_key(key)
@@ -601,14 +600,14 @@ class InMemoryStorage(BaseStorage):
                 pass
         self.store(key, response, request, metadata)  # pragma: no cover
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         """
         Retreives the response from the cache using his key.
 
         :param key: Hashed value of concatenated HTTP method and URI
         :type key: str
         :return: An HTTP response and its HTTP request.
-        :rtype: tp.Optional[StoredResponse]
+        :rtype: StoredResponse | None
         """
 
         self._remove_expired_caches()
@@ -646,23 +645,23 @@ class S3Storage(BaseStorage):  # pragma: no cover
     :param bucket_name: The name of the bucket to store the responses in
     :type bucket_name: str
     :param serializer: Serializer capable of serializing and de-serializing http responses, defaults to None
-    :type serializer: tp.Optional[BaseSerializer], optional
+    :type serializer: BaseSerializer | None, optional
     :param ttl: Specifies the maximum number of seconds that the response can be cached, defaults to None
-    :type ttl: tp.Optional[tp.Union[int, float]], optional
+    :type ttl: int | float | None, optional
     :param check_ttl_every: How often in seconds to check staleness of **all** cache files.
         Makes sense only with set `ttl`, defaults to 60
-    :type check_ttl_every: tp.Union[int, float]
+    :type check_ttl_every: int | float
     :param client: A client for S3, defaults to None
-    :type client: tp.Optional[tp.Any], optional
+    :type client: tp.Any | None, optional
     """
 
     def __init__(
         self,
         bucket_name: str,
-        serializer: tp.Optional[BaseSerializer] = None,
-        ttl: tp.Optional[tp.Union[int, float]] = None,
-        check_ttl_every: tp.Union[int, float] = 60,
-        client: tp.Optional[tp.Any] = None,
+        serializer: BaseSerializer | None = None,
+        ttl: int | float | None = None,
+        check_ttl_every: int | float = 60,
+        client: tp.Any | None = None,
     ) -> None:
         super().__init__(serializer, ttl)
 
@@ -716,7 +715,7 @@ class S3Storage(BaseStorage):  # pragma: no cover
         """
 
         if isinstance(key, Response):  # pragma: no cover
-            key = t.cast(str, key.extensions["cache_metadata"]["cache_key"])
+            key = tp.cast(str, key.extensions["cache_metadata"]["cache_key"])
 
         with self._lock:
             self._s3_manager.remove_entry(key)
@@ -739,14 +738,14 @@ class S3Storage(BaseStorage):  # pragma: no cover
             serialized = self._serializer.dumps(response=response, request=request, metadata=metadata)
             self._s3_manager.write_to(path=key, data=serialized, only_metadata=True)
 
-    def retrieve(self, key: str) -> tp.Optional[StoredResponse]:
+    def retrieve(self, key: str) -> StoredResponse | None:
         """
         Retreives the response from the cache using his key.
 
         :param key: Hashed value of concatenated HTTP method and URI
         :type key: str
         :return: An HTTP response and its HTTP request.
-        :rtype: tp.Optional[StoredResponse]
+        :rtype: StoredResponse | None
         """
 
         self._remove_expired_caches(key)

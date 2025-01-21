@@ -1,5 +1,5 @@
 import string
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 from ._exceptions import ParseError, ValidationError
 
@@ -56,7 +56,7 @@ def normalize_directive(text: str) -> str:
     return text.replace("-", "_")
 
 
-def parse_cache_control(cache_control_values: List[str]) -> "CacheControl":
+def parse_cache_control(cache_control_values: list[str]) -> "CacheControl":
     directives = {}
 
     for cache_control_value in cache_control_values:
@@ -113,11 +113,11 @@ def parse_cache_control(cache_control_values: List[str]) -> "CacheControl":
 
 
 class Vary:
-    def __init__(self, values: List[str]) -> None:
+    def __init__(self, values: list[str]) -> None:
         self._values = values
 
     @classmethod
-    def from_value(cls, vary_values: List[str]) -> "Vary":
+    def from_value(cls, vary_values: list[str]) -> "Vary":
         values = []
 
         for vary_value in vary_values:
@@ -136,11 +136,11 @@ class CacheControl:
         min_fresh: Optional[int] = None,  # [RFC9111, Section 5.2.1.3]
         must_revalidate: bool = False,  # [RFC9111, Section 5.2.2.2]
         must_understand: bool = False,  # [RFC9111, Section 5.2.2.3]
-        no_cache: Union[bool, List[str]] = False,  # [RFC9111, Section 5.2.1.4, 5.2.2.4]
+        no_cache: Union[bool, list[str]] = False,  # [RFC9111, Section 5.2.1.4, 5.2.2.4]
         no_store: bool = False,  # [RFC9111, Section 5.2.1.5, 5.2.2.5]
         no_transform: bool = False,  # [RFC9111, Section 5.2.1.6, 5.2.2.6]
         only_if_cached: bool = False,  # [RFC9111, Section 5.2.1.7]
-        private: Union[bool, List[str]] = False,  # [RFC9111, Section 5.2.2.7]
+        private: Union[bool, list[str]] = False,  # [RFC9111, Section 5.2.2.7]
         proxy_revalidate: bool = False,  # [RFC9111, Section 5.2.2.8]
         public: bool = False,  # [RFC9111, Section 5.2.2.9]
         s_maxage: Optional[int] = None,  # [RFC9111, Section 5.2.2.10]
@@ -161,8 +161,8 @@ class CacheControl:
         self.s_maxage = s_maxage
 
     @classmethod
-    def validate(cls, directives: Dict[str, Any]) -> Dict[str, Any]:
-        validated_data: Dict[str, Any] = {}
+    def validate(cls, directives: dict[str, Any]) -> dict[str, Any]:
+        validated_data: dict[str, Any] = {}
 
         for key, value in directives.items():
             key = normalize_directive(key)

@@ -49,16 +49,16 @@ class CacheTransport(httpx.BaseTransport):
     :param transport: `Transport` that our class wraps in order to add an HTTP Cache layer on top of
     :type transport: httpx.BaseTransport
     :param storage: Storage that handles how the responses should be saved., defaults to None
-    :type storage: tp.Optional[BaseStorage], optional
+    :type storage: BaseStorage | None, optional
     :param controller: Controller that manages the cache behavior at the specification level, defaults to None
-    :type controller: tp.Optional[Controller], optional
+    :type controller: Controller | None, optional
     """
 
     def __init__(
         self,
         transport: httpx.BaseTransport,
-        storage: tp.Optional[BaseStorage] = None,
-        controller: tp.Optional[Controller] = None,
+        storage: BaseStorage | None = None,
+        controller: Controller | None = None,
     ) -> None:
         self._transport = transport
 
@@ -270,8 +270,8 @@ class CacheTransport(httpx.BaseTransport):
 
     def __exit__(
         self,
-        exc_type: tp.Optional[tp.Type[BaseException]] = None,
-        exc_value: tp.Optional[BaseException] = None,
-        traceback: tp.Optional[types.TracebackType] = None,
+        exc_type: tp.Type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: types.TracebackType | None = None,
     ) -> None:
         self.close()

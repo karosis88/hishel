@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import types
 import typing as tp
 from threading import Lock as T_LOCK
@@ -14,9 +16,9 @@ class AsyncLock:
 
     async def __aexit__(
         self,
-        exc_type: tp.Optional[tp.Type[BaseException]] = None,
-        exc_value: tp.Optional[BaseException] = None,
-        traceback: tp.Optional[types.TracebackType] = None,
+        exc_type: tp.Type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: types.TracebackType | None = None,
     ) -> None:
         self._lock.release()
 
@@ -30,8 +32,8 @@ class Lock:
 
     def __exit__(
         self,
-        exc_type: tp.Optional[tp.Type[BaseException]] = None,
-        exc_value: tp.Optional[BaseException] = None,
-        traceback: tp.Optional[types.TracebackType] = None,
+        exc_type: tp.Type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: types.TracebackType | None = None,
     ) -> None:
         self._lock.release()

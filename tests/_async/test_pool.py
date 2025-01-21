@@ -1,4 +1,4 @@
-import typing as tp
+from __future__ import annotations
 
 import httpcore
 import pytest
@@ -215,7 +215,7 @@ async def test_pool_with_custom_key_generator():
 
 @pytest.mark.anyio
 async def test_pool_with_wrong_type_of_storage():
-    storage: tp.Union[hishel.FileStorage, hishel.AsyncFileStorage]
+    storage: hishel.FileStorage | hishel.AsyncFileStorage
 
     try:  # pragma: no cover
         sniffio.current_async_library()

@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import calendar
 import time
-import typing as tp
 from email.utils import parsedate_tz
 from hashlib import blake2b
 
@@ -21,7 +22,7 @@ class Clock(BaseClock):
         return int(time.time())
 
 
-def normalized_url(url: tp.Union[httpcore.URL, str, bytes]) -> str:
+def normalized_url(url: httpcore.URL | str | bytes) -> str:
     if isinstance(url, str):  # pragma: no cover
         return url
 
@@ -56,10 +57,10 @@ def generate_key(request: httpcore.Request, body: bytes = b"") -> str:
 
 
 def extract_header_values(
-    headers: tp.List[tp.Tuple[bytes, bytes]],
-    header_key: tp.Union[bytes, str],
+    headers: list[tuple[bytes, bytes]],
+    header_key: bytes | str,
     single: bool = False,
-) -> tp.List[bytes]:
+) -> list[bytes]:
     if isinstance(header_key, str):
         header_key = header_key.encode(HEADERS_ENCODING)
     extracted_headers = []
@@ -72,13 +73,13 @@ def extract_header_values(
 
 
 def extract_header_values_decoded(
-    headers: tp.List[tp.Tuple[bytes, bytes]], header_key: bytes, single: bool = False
-) -> tp.List[str]:
+    headers: list[tuple[bytes, bytes]], header_key: bytes, single: bool = False
+) -> list[str]:
     values = extract_header_values(headers=headers, header_key=header_key, single=single)
     return [value.decode(HEADERS_ENCODING) for value in values]
 
 
-def header_presents(headers: tp.List[tp.Tuple[bytes, bytes]], header_key: bytes) -> bool:
+def header_presents(headers: list[tuple[bytes, bytes]], header_key: bytes) -> bool:
     return bool(extract_header_values(headers, header_key, single=True))
 
 
@@ -88,11 +89,11 @@ def parse_date(date: str) -> int:
     return timestamp
 
 
-async def asleep(seconds: tp.Union[int, float]) -> None:
+async def asleep(seconds: int | float) -> None:
     await anyio.sleep(seconds)
 
 
-def sleep(seconds: tp.Union[int, float]) -> None:
+def sleep(seconds: int | float) -> None:
     time.sleep(seconds)
 
 
