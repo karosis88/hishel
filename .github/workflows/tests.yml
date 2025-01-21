@@ -7,7 +7,16 @@ on:
     branches: ["master"]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
   tests:
+    needs: [lint]
     name: "Python ${{ matrix.python-version }}"
     runs-on: "ubuntu-latest"
     

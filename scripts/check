@@ -4,9 +4,5 @@ export PREFIX=""
 if [ -d '.venv' ] ; then
     export PREFIX=".venv/bin/"
 fi
-export SOURCE_FILES="hishel tests"
 
-${PREFIX}ruff format $SOURCE_FILES --diff
-${PREFIX}ruff check $SOURCE_FILES
-${PREFIX}mypy $SOURCE_FILES
 ${PREFIX}python unasync.py --check
