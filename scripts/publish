@@ -1,3 +1,0 @@
-#! /bin/bash -ex
-
-hatch publish -u __token__ -a $HISHEL_PYPI
