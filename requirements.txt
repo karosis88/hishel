@@ -1,7 +1,7 @@
 -e .[yaml,redis,sqlite,s3]
 
 # linting
-ruff==0.6.3
+ruff==0.9.4
 mypy==1.14.1
 
 # docs
