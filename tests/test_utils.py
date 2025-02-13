@@ -89,6 +89,12 @@ def test_parse_date():
     assert timestamp == 1440504000
 
 
+def test_parse_invalid_date():
+    date = "0"
+    timestamp = parse_date(date)
+    assert timestamp is None
+
+
 def test_float_seconds_to_milliseconds():
     seconds = 1.234
     milliseconds = float_seconds_to_int_milliseconds(seconds)

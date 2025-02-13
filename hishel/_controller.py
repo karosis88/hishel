@@ -60,8 +60,12 @@ def get_freshness_lifetime(response: Response) -> tp.Optional[int]:
     if header_presents(response.headers, b"expires"):
         expires = extract_header_values_decoded(response.headers, b"expires", single=True)[0]
         expires_timestamp = parse_date(expires)
+        if expires_timestamp is None:
+            return None
         date = extract_header_values_decoded(response.headers, b"date", single=True)[0]
         date_timestamp = parse_date(date)
+        if date_timestamp is None:
+            return None
 
         return expires_timestamp - date_timestamp
     return None
@@ -72,11 +76,12 @@ def get_heuristic_freshness(response: Response, clock: "BaseClock") -> int:
 
     if last_modified:
         last_modified_timestamp = parse_date(last_modified[0])
-        now = clock.now()
+        if last_modified_timestamp is not None:
+            now = clock.now()
 
-        ONE_WEEK = 604_800
+            ONE_WEEK = 604_800
 
-        return min(ONE_WEEK, int((now - last_modified_timestamp) * 0.1))
+            return min(ONE_WEEK, int((now - last_modified_timestamp) * 0.1))
 
     ONE_DAY = 86_400
     return ONE_DAY
@@ -89,6 +94,8 @@ def get_age(response: Response, clock: "BaseClock") -> int:
         return float("inf")  # type: ignore
 
     date = parse_date(extract_header_values_decoded(response.headers, b"date")[0])
+    if date is None:
+        return float("inf")  # type: ignore
 
     now = clock.now()
 
