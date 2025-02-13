@@ -262,6 +262,32 @@ def test_get_freshness_lifetime_with_expires():
     assert freshness_lifetime == 86400  # one day
 
 
+def test_get_freshness_lifetime_with_invalid_expires():
+    response = Response(
+        status=200,
+        headers=[
+            (b"Expires", b"0"),
+            (b"Date", b"Mon, 24 Aug 2015 12:00:00 GMT"),
+        ],
+    )
+
+    freshness_lifetime = get_freshness_lifetime(response=response)
+    assert freshness_lifetime is None
+
+
+def test_get_freshness_lifetime_with_invalid_date():
+    response = Response(
+        status=200,
+        headers=[
+            (b"Expires", b"Mon, 25 Aug 2015 12:00:00 GMT"),
+            (b"Date", b"0"),
+        ],
+    )
+
+    freshness_lifetime = get_freshness_lifetime(response=response)
+    assert freshness_lifetime is None
+
+
 def test_get_heuristic_freshness():
     ONE_WEEK = 604_800
 
@@ -280,6 +306,13 @@ def test_get_heuristic_freshness_without_last_modified():
     assert get_heuristic_freshness(response=response, clock=Clock()) == ONE_DAY
 
 
+def test_get_heuristic_invalid_last_modified():
+    ONE_DAY = 86400
+
+    response = Response(status=200, headers=[(b"Last-Modified", "0")])
+    assert get_heuristic_freshness(response=response, clock=Clock()) == ONE_DAY
+
+
 def test_get_age():
     class MockedClock(BaseClock):
         def now(self) -> int:
@@ -291,6 +324,13 @@ def test_get_age():
 
 
 def test_get_age_return_inf_for_invalid_date():
+    response = Response(status=200, headers=[(b"Date", b"0")])
+    age = get_age(response=response, clock=Clock())
+
+    assert age == float("inf")
+
+
+def test_get_age_return_inf_for_no_date():
     age = get_age(response=Response(status=200), clock=Clock())
 
     assert age == float("inf")

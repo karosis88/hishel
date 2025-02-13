@@ -82,9 +82,11 @@ def header_presents(headers: tp.List[tp.Tuple[bytes, bytes]], header_key: bytes)
     return bool(extract_header_values(headers, header_key, single=True))
 
 
-def parse_date(date: str) -> int:
+def parse_date(date: str) -> tp.Optional[int]:
     expires = parsedate_tz(date)
-    timestamp = calendar.timegm(expires[:6])  # type: ignore
+    if expires is None:
+        return None
+    timestamp = calendar.timegm(expires[:6])
     return timestamp
 
 
